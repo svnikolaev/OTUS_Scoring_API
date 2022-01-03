@@ -1,13 +1,14 @@
 import random
 
 
-def get_score(store, phone, email, birthday=None, gender=None, first_name=None, last_name=None):
+def get_score(store=None, phone=None, email=None, birthday=None, gender=None,
+              first_name=None, last_name=None):
     score = 0
     if phone:
         score += 1.5
     if email:
         score += 1.5
-    if birthday and gender:
+    if birthday and gender in [0, 1, 2]:
         score += 1.5
     if first_name and last_name:
         score += 0.5
@@ -15,5 +16,6 @@ def get_score(store, phone, email, birthday=None, gender=None, first_name=None, 
 
 
 def get_interests(store, cid):
-    interests = ["cars", "pets", "travel", "hi-tech", "sport", "music", "books", "tv", "cinema", "geek", "otus"]
+    interests = ["cars", "pets", "travel", "hi-tech", "sport", "music",
+                 "books", "tv", "cinema", "geek", "otus"]
     return random.sample(interests, 2)

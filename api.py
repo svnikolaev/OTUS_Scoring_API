@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import abc
+import abc  # noqa F401
 import json
 import datetime
 import logging
@@ -10,6 +10,7 @@ from typing import Optional
 import uuid
 from optparse import OptionParser
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from scoring import get_score, get_interests  # noqa F401
 
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
@@ -111,6 +112,26 @@ class MethodRequest(object):
     arguments = ArgumentsField(required=True, nullable=True)
     method = CharField(required=True, nullable=False)
 
+    def __init__(self, request):
+        if request.get('body'):
+            body = request.get('body')
+        else:
+            raise ValueError
+        if not set(body.keys()).issuperset(
+                {'login', 'token', 'arguments', 'method'}) \
+                or body['method'] not in ['online_score', 'clients_interests']:
+            raise ValueError
+        self.account = body["account"]
+        self.login = body["login"]
+        self.token = body["token"]
+        self.arguments = body["arguments"]
+        self.method = body["method"]
+
+    def __str__(self):
+        return str({'account': self.account, 'login': self.login,
+                    'token': self.token, 'arguments': self.arguments,
+                    'method': self.method})
+
     @property
     def is_admin(self):
         return self.login == ADMIN_LOGIN
@@ -118,17 +139,109 @@ class MethodRequest(object):
 
 def check_auth(request):
     if request.is_admin:
-        digest = hashlib.sha512(datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT).hexdigest()  # noqa E501
+        digest = hashlib.sha512(
+            (datetime.datetime.now().strftime("%Y%m%d%H")
+                + ADMIN_SALT).encode('utf-8')
+        ).hexdigest()
     else:
-        digest = hashlib.sha512(request.account + request.login + SALT).hexdigest()  # noqa E501
+        digest = hashlib.sha512(
+            (request.account + request.login + SALT).encode('utf-8')
+        ).hexdigest()
     if digest == request.token:
         return True
     return False
 
 
+def online_score_arguments_validation(arguments: dict) -> bool:
+    # phone-email, first name-last name, gender-birthday
+    if not set(arguments.keys()).issubset(
+        {
+            'phone',
+            'email',
+            'first_name',
+            'last_name',
+            'birthday',
+            'gender'
+        }
+    ):
+        return False
+    if not (
+        arguments.get('phone') and arguments.get('email')
+        or arguments.get('first_name') and arguments.get('last_name')
+        or arguments.get('birthday') and arguments.get('gender') is not None
+    ):
+        return False
+    for key, value in arguments.items():
+        if key == 'phone' and value:
+            if str(value)[0] != '7':
+                return False
+            if len(str(value)) != 11:
+                return False
+        if key == 'email' and value:
+            if '@' not in value:
+                return False
+        if key == 'first_name' and value:
+            if not type(value) is str:
+                return False
+        if key == 'last_name' and value:
+            if not type(value) is str:
+                return False
+        if key == 'birthday' and value:
+            try:
+                birthday = datetime.datetime.strptime(value, '%d.%m.%Y')
+            except ValueError:
+                return False
+            if datetime.datetime.now() - birthday > datetime.timedelta(
+                days=48215  # 70 years
+            ):
+                return False
+        if key == 'gender' and value:
+            if not type(value) is int or value not in [0, 1, 2]:
+                return False
+    return True
+
+
+def clients_interests_arguments_validation(arguments: dict) -> bool:
+    if not arguments.get('client_ids') \
+            or type(arguments['client_ids']) is not list:
+        return False
+    for item in arguments['client_ids']:
+        if type(item) is not int:
+            return False
+    if arguments.get('date'):
+        try:
+            datetime.datetime.strptime(arguments['date'], '%d.%m.%Y')
+        except ValueError:
+            return False
+    return True
+
+
 def method_handler(request, ctx, store):
-    response, code = None, None
-    return response, code
+    try:
+        req = MethodRequest(request)
+    except ValueError:
+        return {'error': 'INVALID_REQUEST'}, INVALID_REQUEST
+    if not check_auth(req):
+        return {'error': 'Forbidden'}, FORBIDDEN
+    if req.is_admin:
+        return {'score': 42}, OK
+    method = request['body']['method']
+    api_method_arguments_validation = {
+        'online_score': online_score_arguments_validation,
+        'clients_interests': clients_interests_arguments_validation
+    }
+    arguments = request['body']['arguments']
+    if not api_method_arguments_validation[method](arguments):
+        return {'error': 'INVALID_REQUEST'}, INVALID_REQUEST
+    if method == 'clients_interests':
+        return_dict = {}
+        for client_id in arguments['client_ids']:
+            return_dict[f'client_id{client_id}'] = get_interests(
+                'nowhere_store', client_id)
+        return return_dict, OK
+    if method == 'online_score':
+        score = get_score(**arguments)
+        return {'score': score}, OK
 
 
 class MainHTTPHandler(BaseHTTPRequestHandler):
@@ -152,7 +265,10 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
 
         if request:
             path = self.path.strip("/")
-            logging.info("%s: %s %s" % (self.path, data_string, context["request_id"]))  # noqa E501
+            logging.info('%s: %s %s' % (self.path, data_string.decode('utf8'), context["request_id"]))  # noqa E501
+            # logging.info("%s" % (self.path))  # noqa E501
+            # logging.info("%s" % (data_string))  # noqa E501
+            # logging.info("%s" % (context["request_id"]))  # noqa E501
             if path in self.router:
                 try:
                     response, code = self.router[path]({"body": request, "headers": self.headers}, context, self.store)  # noqa E501
@@ -163,6 +279,7 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
                 code = NOT_FOUND
 
         self.send_response(code)
+        # self.send_response(BAD_REQUEST)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         if code not in ERRORS:
@@ -170,8 +287,9 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
         else:
             r = {"error": response or ERRORS.get(code, "Unknown Error"), "code": code}  # noqa E501
         context.update(r)
-        logging.info(context)
-        self.wfile.write(json.dumps(r))
+        logging.info(str(context))
+        # self.wfile.write(json.dumps(r))
+        self.wfile.write(json.dumps(r).encode())
         return
 
 
