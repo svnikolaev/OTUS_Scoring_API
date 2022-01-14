@@ -192,7 +192,7 @@ def online_score_arguments_validation(arguments: dict) -> bool:
             except ValueError:
                 return False
             if datetime.datetime.now() - birthday > datetime.timedelta(
-                days=48215  # 70 years
+                days=25550  # 70 years
             ):
                 return False
         if key == 'gender' and value:
@@ -220,12 +220,15 @@ def method_handler(request, ctx, store):
     try:
         req = MethodRequest(request)
     except ValueError:
+        # print(request)
         return {'error': 'INVALID_REQUEST'}, INVALID_REQUEST
+        # return None, INVALID_REQUEST
+
+    method = request['body']['method']
     if not check_auth(req):
         return {'error': 'Forbidden'}, FORBIDDEN
-    if req.is_admin:
+    if req.is_admin and method == 'online_score':
         return {'score': 42}, OK
-    method = request['body']['method']
     api_method_arguments_validation = {
         'online_score': online_score_arguments_validation,
         'clients_interests': clients_interests_arguments_validation
@@ -265,13 +268,18 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
 
         if request:
             path = self.path.strip("/")
-            logging.info('%s: %s %s' % (self.path, data_string.decode('utf8'), context["request_id"]))  # noqa E501
-            # logging.info("%s" % (self.path))  # noqa E501
-            # logging.info("%s" % (data_string))  # noqa E501
-            # logging.info("%s" % (context["request_id"]))  # noqa E501
+            logging.info('%s: %s %s' % (
+                self.path,
+                data_string.decode('utf8'),
+                context["request_id"])
+            )
             if path in self.router:
                 try:
-                    response, code = self.router[path]({"body": request, "headers": self.headers}, context, self.store)  # noqa E501
+                    response, code = self.router[path](
+                        {"body": request, "headers": self.headers},
+                        context,
+                        self.store
+                    )
                 except Exception as e:
                     logging.exception("Unexpected error: %s" % e)
                     code = INTERNAL_ERROR
@@ -279,16 +287,17 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
                 code = NOT_FOUND
 
         self.send_response(code)
-        # self.send_response(BAD_REQUEST)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         if code not in ERRORS:
             r = {"response": response, "code": code}
         else:
-            r = {"error": response or ERRORS.get(code, "Unknown Error"), "code": code}  # noqa E501
+            r = {
+                "error": response or ERRORS.get(code, "Unknown Error"),
+                "code": code
+            }
         context.update(r)
         logging.info(str(context))
-        # self.wfile.write(json.dumps(r))
         self.wfile.write(json.dumps(r).encode())
         return
 
