@@ -6,7 +6,9 @@ import datetime
 import hashlib
 import json
 import logging
+from site import abs_paths
 import uuid
+from abc import ABC, abstractclassmethod
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from optparse import OptionParser
 from typing import Optional
@@ -42,7 +44,13 @@ BIRTHDAY_LIMIT = 70
 GENDER_OPTIONS = [0, 1, 2]
 
 
-class Field:
+class AbstractField(ABC):
+
+    @abstractclassmethod
+    def validate(self):
+        pass
+
+class Field(AbstractField):
     def __init__(self,
                  required: Optional[bool] = False,
                  nullable: Optional[bool] = False) -> None:
