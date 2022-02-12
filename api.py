@@ -6,7 +6,6 @@ import datetime
 import hashlib
 import json
 import logging
-from site import abs_paths
 import uuid
 from abc import ABC, abstractclassmethod
 from http.server import BaseHTTPRequestHandler, HTTPServer
