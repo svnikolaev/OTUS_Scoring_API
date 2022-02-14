@@ -37,9 +37,7 @@ GENDERS = {
     MALE: "male",
     FEMALE: "female",
 }
-
 BIRTHDAY_LIMIT = 70
-GENDER_OPTIONS = [0, 1, 2]
 
 
 class Field:
@@ -116,7 +114,7 @@ class BirthDayField(DateField):
 class GenderField(Field):
     def validate(self, value):
         super().validate(value)
-        if not isinstance(value, int) or value not in GENDER_OPTIONS:
+        if not isinstance(value, int) or value not in GENDERS:
             raise ValueError('The field should be integer 0, 1 or 2')
         return value
 
