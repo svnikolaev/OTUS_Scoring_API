@@ -142,13 +142,15 @@ class MetaRequest(type):
 
 class Request(metaclass=MetaRequest):
     def __init__(self, **kwargs):
-        for attribute in self._fields:  # TODO rework validation part
-            validate = self._fields[attribute].validate
+        for attribute in self._fields:
             value = kwargs.get(attribute)
-            if value is not None or (not value and self._fields[attribute].required):
-                setattr(self, attribute, validate(kwargs.get(attribute)))
-            else:
-                setattr(self, attribute, None)
+            setattr(self, attribute, value)
+
+    def validate(self):
+        for attribute, field in self._fields.items():
+            value = getattr(self, attribute)
+            if value is not None or field.required:
+                field.validate(value)
 
     def __repr__(self):
         attributes = {
@@ -187,8 +189,9 @@ class OnlineScoreRequest(MethodRequest):
     @property
     def enough_fields(self):
         if (
-            (self.phone and self.email) or (self.first_name and self.last_name)
-            or (self.birthday and (self.gender in GENDERS))
+            (self.phone and self.email)
+            or (self.first_name and self.last_name)
+            or (self.birthday and self.gender in GENDERS)
         ):
             return True
         else:
@@ -213,6 +216,7 @@ def check_auth(request):
 def clients_interests_handler(request, ctx, store):
     try:
         r = ClientsInterestsRequest(**request.arguments)
+        r.validate()
     except ValueError as err:
         return {"code": INVALID_REQUEST, "error": str(err)}, INVALID_REQUEST
     clients_interests = {}
@@ -228,6 +232,7 @@ def online_score_handler(request, ctx, store):
         return {'score': score}, OK
     try:
         r = OnlineScoreRequest(**request.arguments)
+        r.validate()
     except ValueError as err:
         return {"code": INVALID_REQUEST, "error": str(err)}, INVALID_REQUEST
     if not r.enough_fields:
@@ -245,6 +250,7 @@ def method_handler(request, ctx, store):
               'online_score': online_score_handler}
     try:
         r = MethodRequest(**request.get('body'))
+        r.validate()
     except ValueError:
         return {'error': 'INVALID_REQUEST'}, INVALID_REQUEST
     if not r.method:
