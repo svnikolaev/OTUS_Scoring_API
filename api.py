@@ -133,25 +133,22 @@ class ClientIDsField(Field):
 class MetaRequest(type):
     def __new__(meta, name, bases, attrs):
         fields = {}
-        new_attrs = attrs.copy()
         for key, value in attrs.items():
             if isinstance(value, Field):
                 fields[key] = value
-                del new_attrs[key]
-        new_attrs['_fields'] = fields
-        attrs = new_attrs
+        attrs['_fields'] = fields
         return type.__new__(meta, name, bases, attrs)
 
 
 class Request(metaclass=MetaRequest):
     def __init__(self, **kwargs):
-        required_attributes = [name for name in self._fields
-                               if self._fields[name].required]
-        passed_attributes = list(kwargs.keys())
-        for attribute in set(required_attributes + passed_attributes):
-            if attribute in self._fields:
-                validate = self._fields[attribute].validate
+        for attribute in self._fields:  # TODO rework validation part
+            validate = self._fields[attribute].validate
+            value = kwargs.get(attribute)
+            if value is not None or (not value and self._fields[attribute].required):
                 setattr(self, attribute, validate(kwargs.get(attribute)))
+            else:
+                setattr(self, attribute, None)
 
     def __repr__(self):
         attributes = {
@@ -189,15 +186,9 @@ class OnlineScoreRequest(MethodRequest):
 
     @property
     def enough_fields(self):
-        phone = getattr(self, 'phone', None)
-        email = getattr(self, 'email', None)
-        first_name = getattr(self, 'first_name', None)
-        last_name = getattr(self, 'last_name', None)
-        birthday = getattr(self, 'birthday', None)
-        gender = getattr(self, 'gender', None)
         if (
-            (phone and email) or (first_name and last_name)
-            or (birthday and gender is not None)
+            (self.phone and self.email) or (self.first_name and self.last_name)
+            or (self.birthday and (self.gender in GENDERS))
         ):
             return True
         else:
