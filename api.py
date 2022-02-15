@@ -259,7 +259,7 @@ def method_handler(request, ctx, store):
     if not r.method:
         return {'error': 'INVALID_REQUEST'}, INVALID_REQUEST
     if not check_auth(r):
-        return {'error': 'Forbidden'}, FORBIDDEN
+        return None, FORBIDDEN
     response, code = method[r.method](r, ctx, store)
     return response, code
 
