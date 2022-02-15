@@ -144,3 +144,4 @@ class TestSuite(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+# flake8: noqa
