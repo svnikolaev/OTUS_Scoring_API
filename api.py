@@ -218,7 +218,11 @@ def clients_interests_handler(request, ctx, store):
         r = ClientsInterestsRequest(**request.arguments)
         r.validate()
     except ValueError as err:
-        return {"code": INVALID_REQUEST, "error": str(err)}, INVALID_REQUEST
+        return {
+            'code': INVALID_REQUEST,
+            'error': str(err)
+        }, INVALID_REQUEST
+
     clients_interests = {}
     for client_id in r.client_ids:
         clients_interests[f'client_id{client_id}'] = get_interests(
@@ -234,12 +238,17 @@ def online_score_handler(request, ctx, store):
         r = OnlineScoreRequest(**request.arguments)
         r.validate()
     except ValueError as err:
-        return {"code": INVALID_REQUEST, "error": str(err)}, INVALID_REQUEST
+        return {
+            'code': INVALID_REQUEST,
+            'error': str(err)
+        }, INVALID_REQUEST
+
     if not r.enough_fields:
         return {
            'code': INVALID_REQUEST,
            'error': 'INVALID_REQUEST: not enough fields'
         }, INVALID_REQUEST
+
     score = get_score(store, r)
     return {'score': score}, OK
 
@@ -251,12 +260,21 @@ def method_handler(request, ctx, store):
     try:
         r = MethodRequest(**request.get('body'))
         r.validate()
-    except ValueError:
-        return {'error': 'INVALID_REQUEST'}, INVALID_REQUEST
+    except ValueError as err:
+        return {
+            'code': INVALID_REQUEST,
+            'error': str(err)
+        }, INVALID_REQUEST
+
     if not r.method:
-        return {'error': 'INVALID_REQUEST'}, INVALID_REQUEST
+        return {
+            'code': INVALID_REQUEST,
+            'error': 'INVALID_REQUEST'
+        }, INVALID_REQUEST
+
     if not check_auth(r):
         return None, FORBIDDEN
+
     response, code = method[r.method](r, ctx, store)
     return response, code
 
